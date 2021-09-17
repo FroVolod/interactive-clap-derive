@@ -6,6 +6,9 @@ use syn;
 use quote::quote;
 use darling::{FromDeriveInput, FromField};
 
+use interactive_clap::ToCli;
+
+
 
 #[derive(Clone, Debug, FromField)]
 struct QueryField {
@@ -56,15 +59,19 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
             let cli_fields = fields.iter().map(|field| {
                 let ident = &field.ident;
                 let ty = &field.ty;
-                quote! { #ident: Option<#ty> }
+                quote! {
+                    #ident: Option<<#ty as ToCli>::CliVariant>
+                }
             });
             let from_cli_fields = fields.iter().map(|field| {
                 let ident = &field.ident.clone().unwrap();
+                let ty = &field.ty;
+                
                 let fn_input_string = format!("input_{}", &ident);
                 let fn_input = &syn::Ident::new(&fn_input_string, Span::call_site());
                 quote! {
                     #ident: match item.#ident {
-                        Some(cli_input) => cli_input,
+                        Some(cli_input) => #ty::from(cli_input),
                         None => #name::#fn_input()
                     }
                 }
@@ -113,14 +120,6 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                 enum #cli_name {
                     #( #enum_variants, )*
                 }
-                
-                // impl From<#cli_name> for #name {
-                //     fn from(item: #cli_name) -> Self {
-                //         Self {
-                //             #( #from_fields, )*
-                //         }
-                //     }
-                // }
             };
             gen.into()
         }
