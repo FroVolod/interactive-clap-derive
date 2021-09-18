@@ -17,4 +17,6 @@ clap = "3.0.0-beta.2"
 clap_generate = "3.0.0-beta.2"
 darling = "0.13.0"
 
-interactive_clap = { path = "../" }
+# interactive_clap = { path = "../" }
+interactive_clap = { git = "https://github.com/FroVolod/interactive-clap", rev="89d37e48648fa56e548892e6307650ec3ecb1a72" }
+
