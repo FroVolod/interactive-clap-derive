@@ -87,9 +87,6 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                 struct #cli_name {
                     #( #cli_fields, )*
                 }
-                impl ToCli for self::commands::TopLevelCommand {
-                    type CliVariant = self::commands::CliTopLevelCommand;
-                }
                 
                 impl From<#cli_name> for #name {
                     fn from(item: #cli_name) -> Self {
@@ -99,6 +96,10 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                     }
                 }
 
+                impl ToCli for self::commands::TopLevelCommand {
+                    type CliVariant = self::commands::CliTopLevelCommand;
+                }
+                
                 // impl ToCli for #name {
                 //     type CliVariant = #cli_name;
                 // }
