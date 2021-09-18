@@ -95,6 +95,19 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                         }
                     }
                 }
+
+                impl ToCli for #name {
+                    type CliVariant = #cli_name;
+                }
+
+                // impl #cli_name {
+                //     subcommand: SubcommandArgs::CliVariant,  //?????????????
+                // }
+
+                // impl #cli_name {
+                //     subcommand: CliSubcommandArgs,  //?????????????
+                // }
+
             };
             gen.into()
         }
