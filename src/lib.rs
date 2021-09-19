@@ -76,7 +76,7 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
             // classic
             let gen = quote! {
                 #[derive(Debug, Default, clap::Clap)]
-                struct #cli_name {
+                pub struct #cli_name {
                     #( #cli_fields, )*
                 }
                 
