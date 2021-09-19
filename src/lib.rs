@@ -118,6 +118,10 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                 enum #cli_name {
                     #( #enum_variants, )*
                 }
+
+                impl interactive_clap::ToCli for #name {
+                    type CliVariant = #cli_name;
+                }
             };
             gen.into()
         }
