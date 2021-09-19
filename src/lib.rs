@@ -6,9 +6,6 @@ use syn;
 use quote::quote;
 use darling::{FromDeriveInput, FromField};
 
-use interactive_clap::ToCli;
-
-
 
 #[derive(Clone, Debug, FromField)]
 struct QueryField {
@@ -78,11 +75,11 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
             });
             // classic
             let gen = quote! {
-                impl std::fmt::Display for #name {
-                    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        write!(fmt, "Hello, Macro! My name is {}!", stringify!(#name))
-                    }
-                }
+                // impl std::fmt::Display for #name {
+                //     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                //         write!(fmt, "Hello, Macro! My name is {}!", stringify!(#name))
+                //     }
+                // }
                 #[derive(Debug, Default, clap::Clap)]
                 struct #cli_name {
                     #( #cli_fields, )*
