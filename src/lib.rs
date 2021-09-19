@@ -96,10 +96,10 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                     }
                 }
 
-                impl ToCli for self::commands::TopLevelCommand {
-                    type CliVariant = self::commands::CliTopLevelCommand;
-                }
-                
+                // impl ToCli for self::commands::TopLevelCommand {
+                //     type CliVariant = self::commands::CliTopLevelCommand;
+                // }
+
                 // impl ToCli for #name {
                 //     type CliVariant = #cli_name;
                 // }
