@@ -75,7 +75,13 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
             });
             // classic
             let gen = quote! {
-                #[derive(Debug, Default, clap::Clap)]
+                // #[derive(Debug, Default, clap::Clap)]
+                #[derive(Debug, Default, Clone, clap::Clap)]
+                #[clap(
+                    setting(clap::AppSettings::ColoredHelp),
+                    setting(clap::AppSettings::DisableHelpSubcommand),
+                    setting(clap::AppSettings::VersionlessSubcommands)
+                )]
                 pub struct #cli_name {
                     #( #cli_fields, )*
                 }
