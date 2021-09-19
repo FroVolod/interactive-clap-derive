@@ -114,7 +114,7 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
                 }
             });
             let gen = quote! {
-                #[derive(Debug, clap::Clap)]
+                #[derive(Debug, Clone, clap::Clap)]
                 enum #cli_name {
                     #( #enum_variants, )*
                 }
