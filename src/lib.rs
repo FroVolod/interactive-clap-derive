@@ -75,41 +75,18 @@ fn impl_interactive_clap_derive(ast: &syn::DeriveInput) -> TokenStream {
             });
             // classic
             let gen = quote! {
-                // impl std::fmt::Display for #name {
-                //     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                //         write!(fmt, "Hello, Macro! My name is {}!", stringify!(#name))
-                //     }
-                // }
                 #[derive(Debug, Default, clap::Clap)]
                 struct #cli_name {
                     #( #cli_fields, )*
                 }
                 
-                impl From<#cli_name> for #name {
-                    fn from(item: #cli_name) -> Self {
-                        Self {
-                            #( #from_cli_fields, )*
-                        }
-                    }
-                }
-
-                // impl ToCli for self::commands::TopLevelCommand {
-                //     type CliVariant = self::commands::CliTopLevelCommand;
+                // impl From<#cli_name> for #name {
+                //     fn from(item: #cli_name) -> Self {
+                //         Self {
+                //             #( #from_cli_fields, )*
+                //         }
+                //     }
                 // }
-
-                // impl ToCli for #name {
-                //     type CliVariant = #cli_name;
-                // }
-
-
-                // impl #cli_name {
-                //     subcommand: SubcommandArgs::CliVariant,  //?????????????
-                // }
-
-                // impl #cli_name {
-                //     subcommand: CliSubcommandArgs,  //?????????????
-                // }
-
             };
             gen.into()
         }
