@@ -46,14 +46,6 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                                         false
                                                     }
                                                 },
-                                                // checking the format of the attribute #[interactive_clap(message="subcommand")]
-                                                proc_macro2::TokenTree::Literal(literal) => {
-                                                    if &literal.to_string() == "subcommand" {
-                                                        true
-                                                    } else {
-                                                        false
-                                                    }
-                                                },
                                                 _ => false
                                             };
                                             if is_attr_interactive_clap {break;}
