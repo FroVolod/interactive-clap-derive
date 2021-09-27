@@ -71,6 +71,12 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     }
                 }
             });
+            let for_cli_fields = fields.iter().map(|field| {
+                let ident = &field.clone().ident.expect("this field does not exist");
+                quote! {
+                    #ident: Some(args.#ident.into())
+                }
+            });
 
             let gen = quote! {
                 #[derive(Debug, Default, Clone, clap::Clap)]
@@ -81,6 +87,14 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 )]
                 pub struct #cli_name {
                     #( #cli_fields, )*
+                }
+
+                impl From<#name> for #cli_name {
+                    fn from(args: #name) -> Self {
+                        Self {
+                            #( #for_cli_fields, )*
+                        }
+                    }
                 }
             };
             gen.into()
