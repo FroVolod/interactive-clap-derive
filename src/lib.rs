@@ -24,50 +24,76 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             let cli_fields = fields.iter().map(|field| {
                 let ident = &field.clone().ident.expect("this field does not exist");
                 let ty = &field.ty;
+                let cli_field = match &ty {
+                    syn::Type::Path(type_path) => {
+                        match type_path.path.segments.first() {
+                            Some(path_segment) => {
+                                if path_segment.ident.eq("Option".into()) {
+                                    match &path_segment.arguments {
+                                        syn::PathArguments::AngleBracketed(gen_args) => {
+                                            let ty_option = &gen_args.args;
+                                            quote! {
+                                                #ident: Option<<#ty_option as ToCli>::CliVariant>
+                                            }
+                                        },
+                                        _ => {
+                                            quote! {
+                                                #ident: Option<<#ty as ToCli>::CliVariant>
+                                            }
+                                        },
+                                    }
+                                } else {
+                                    quote! {
+                                        #ident: Option<<#ty as ToCli>::CliVariant>
+                                    }
+                                }
+                            },
+                            _ => quote! {
+                                    #ident: Option<<#ty as ToCli>::CliVariant>
+                                }
+                        }
+                    },
+                    _ => quote! {
+                            #ident: Option<<#ty as ToCli>::CliVariant>
+                        }
+                };
                 if field.attrs.is_empty() {
-                    return quote! {
-                        #ident: Option<<#ty as ToCli>::CliVariant>
+                    return cli_field
+                };
+                let mut clap_attr_vec: Vec<String> = vec![];
+                for attr in &field.attrs {
+                    if attr.path.is_ident("interactive_clap".into()) {
+                        for attr_token in attr.tokens.clone() {
+                            match attr_token {
+                                proc_macro2::TokenTree::Group(group) => {
+                                    for item in group.stream() {
+                                        match item {
+                                            proc_macro2::TokenTree::Ident(ident) => {
+                                                if ["subcommand", "long", "skip"].contains(&ident.to_string().as_str()) {
+                                                    clap_attr_vec.push(ident.to_string())
+                                                }
+                                            },
+                                            _ => ()
+                                        };
+                                    }
+                                },
+                                _ => ()
+                            }
+                        };
                     }
                 };
-                let is_attr_interactive_clap_subcommand: bool = {
-                    let mut is_attr_interactive_clap: bool = false;
-                    for attr in &field.attrs {
-                        if attr.path.is_ident("interactive_clap".into()) {
-                            for attr_token in attr.tokens.clone() {
-                                if match attr_token {
-                                    proc_macro2::TokenTree::Group(group) => {
-                                        for item in group.stream() {
-                                            is_attr_interactive_clap = match item {
-                                                // checking the format of the attribute #[interactive_clap(subcommand)]
-                                                proc_macro2::TokenTree::Ident(ident) => {
-                                                    if &ident.to_string() == "subcommand" {
-                                                        true
-                                                    } else {
-                                                        false
-                                                    }
-                                                },
-                                                _ => false
-                                            };
-                                            if is_attr_interactive_clap {break;}
-                                        };
-                                        is_attr_interactive_clap
-                                    },
-                                    _ => false
-                                }
-                                {break;}
-                            };
-                        }
-                    };
-                    is_attr_interactive_clap
-                };
-                if is_attr_interactive_clap_subcommand {
+                if !clap_attr_vec.is_empty() {
+                    let clap_attrs = clap_attr_vec.iter().map(|clap_attr| {
+                        let attr = &syn::Ident::new(clap_attr, Span::call_site());
+                        quote! {#attr}
+                    });
                     quote! {
-                        #[clap(subcommand)]
-                        #ident: Option<<#ty as ToCli>::CliVariant>
+                        #[clap(#(#clap_attrs, )*)]
+                        #cli_field
                     }
                 } else {
                     quote! {
-                        #ident: Option<<#ty as ToCli>::CliVariant>
+                        #cli_field
                     }
                 }
             });
@@ -77,7 +103,6 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     #ident: Some(args.#ident.into())
                 }
             });
-
             let gen = quote! {
                 #[derive(Debug, Default, Clone, clap::Clap)]
                 #[clap(
@@ -87,6 +112,10 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 )]
                 pub struct #cli_name {
                     #( #cli_fields, )*
+                }
+
+                impl interactive_clap::ToCli for #name {
+                    type CliVariant = #cli_name;
                 }
 
                 impl From<#name> for #cli_name {
@@ -136,6 +165,11 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     }
                 }
             });
+            let for_cli_enum_variants = variants.iter().map(|variant| {
+                let ident = &variant.ident;
+
+                quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
+            });
             let gen = quote! {
                 #[derive(Debug, Clone, clap::Clap)]
                 pub enum #cli_name {
@@ -144,6 +178,14 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 impl interactive_clap::ToCli for #name {
                     type CliVariant = #cli_name;
+                }
+
+                impl From<#name> for #cli_name {
+                    fn from(command: #name) -> Self {
+                        match command {
+                            #( #for_cli_enum_variants, )*
+                        }
+                    }
                 }
             };
             gen.into()
