@@ -21,10 +21,16 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
     match &ast.data {
         syn::Data::Struct(data_struct) => {
             let fields = data_struct.clone().fields;
+            let mut args_subcommand = quote! {
+                let mut args = std::collections::VecDeque::new();
+            };
+            let mut args_push_front = quote!();
+            let mut args_push_front_vec = vec![quote!()];
+            let mut ident_skip_field_vec: Vec<syn::Ident> = vec![];
             let cli_fields = fields.iter().map(|field| {
-                let ident = &field.clone().ident.expect("this field does not exist");
+                let ident_field = &field.clone().ident.expect("this field does not exist");
                 let ty = &field.ty;
-                let cli_field = match &ty {
+                let mut cli_field = match &ty {
                     syn::Type::Path(type_path) => {
                         match type_path.path.segments.first() {
                             Some(path_segment) => {
@@ -33,31 +39,33 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                         syn::PathArguments::AngleBracketed(gen_args) => {
                                             let ty_option = &gen_args.args;
                                             quote! {
-                                                #ident: Option<<#ty_option as ToCli>::CliVariant>
+                                                #ident_field: Option<<#ty_option as ToCli>::CliVariant>
                                             }
                                         },
                                         _ => {
                                             quote! {
-                                                #ident: Option<<#ty as ToCli>::CliVariant>
+                                                #ident_field: Option<<#ty as ToCli>::CliVariant>
                                             }
                                         },
                                     }
                                 } else {
                                     quote! {
-                                        #ident: Option<<#ty as ToCli>::CliVariant>
+                                        #ident_field: Option<<#ty as ToCli>::CliVariant>
                                     }
                                 }
                             },
-                            _ => quote! {
-                                    #ident: Option<<#ty as ToCli>::CliVariant>
-                                }
+                            _ => abort_call_site!("Only option `PathSegment` is needed")
                         }
                     },
-                    _ => quote! {
-                            #ident: Option<<#ty as ToCli>::CliVariant>
-                        }
+                    _ => abort_call_site!("Only option `Type::Path` is needed")
                 };
                 if field.attrs.is_empty() {
+                    args_push_front = quote!{
+                        if let Some(arg) = &self.#ident_field {
+                            args.push_front(arg.to_string())
+                        }
+                    };
+                    args_push_front_vec.push(args_push_front.clone());
                     return cli_field
                 };
                 let mut clap_attr_vec: Vec<String> = vec![];
@@ -71,16 +79,41 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                             proc_macro2::TokenTree::Ident(ident) => {
                                                 if ["subcommand", "long", "skip"].contains(&ident.to_string().as_str()) {
                                                     clap_attr_vec.push(ident.to_string())
+                                                } else {
+                                                    continue;
+                                                };
+                                                if "subcommand".to_string() == ident.to_string() {
+                                                    args_subcommand = quote! {
+                                                        let mut args = self
+                                                            .#ident_field
+                                                            .as_ref()
+                                                            .map(|subcommand| subcommand.to_cli_args())
+                                                            .unwrap_or_default();
+                                                    };
+                                                } else if "long".to_string() == ident.to_string() {
+                                                    args_push_front = quote!{
+                                                        if let Some(arg) = &self.#ident_field {
+                                                            args.push_front(arg.to_string());
+                                                            args.push_front(std::concat!("--", std::stringify!(#ident_field)).to_string());
+                                                        }
+                                                    };
+                                                    args_push_front_vec.push(args_push_front.clone())
+                                                } else if "skip".to_string() == ident.to_string() {
+                                                    ident_skip_field_vec.push(ident_field.clone());
+                                                    cli_field = quote! ()
                                                 }
                                             },
-                                            _ => ()
+                                            _ => abort_call_site!("Only option `TokenTree::Ident` is needed")
                                         };
                                     }
                                 },
-                                _ => ()
+                                _ => abort_call_site!("Only option `TokenTree::Group` is needed")
                             }
                         };
                     }
+                };
+                if cli_field.is_empty() {
+                    return cli_field
                 };
                 if !clap_attr_vec.is_empty() {
                     let clap_attrs = clap_attr_vec.iter().map(|clap_attr| {
@@ -96,13 +129,36 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         #cli_field
                     }
                 }
-            });
+            })
+            .filter(|token_stream| !token_stream.is_empty())
+            .collect::<Vec<_>>();
             let for_cli_fields = fields.iter().map(|field| {
                 let ident = &field.clone().ident.expect("this field does not exist");
-                quote! {
-                    #ident: Some(args.#ident.into())
+                if ident_skip_field_vec.contains(ident) {
+                    quote! ()
+                } else {
+                    let ty = &field.ty;
+                    match &ty {
+                        syn::Type::Path(type_path) => {
+                            match type_path.path.segments.first() {
+                                Some(path_segment) => {
+                                    if path_segment.ident.eq("Option".into()) {
+                                        quote! {
+                                            #ident: args.#ident.into()
+                                        }
+                                    } else {
+                                        quote! {
+                                            #ident: Some(args.#ident.into())
+                                        }
+                                    }
+                                },
+                                _ => abort_call_site!("Only option `PathSegment` is needed")
+                        }},
+                        _ => abort_call_site!("Only option `Type::Path` is needed")
+                    }
                 }
-            });
+            })
+            .filter(|token_stream| !token_stream.is_empty());
             let gen = quote! {
                 #[derive(Debug, Default, Clone, clap::Clap)]
                 #[clap(
@@ -123,6 +179,14 @@ fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         Self {
                             #( #for_cli_fields, )*
                         }
+                    }
+                }
+
+                impl #cli_name {
+                    pub fn to_cli_args(&self) -> std::collections::VecDeque<String> {
+                        #args_subcommand;
+                        #(#args_push_front_vec; )*
+                        args
                     }
                 }
             };
