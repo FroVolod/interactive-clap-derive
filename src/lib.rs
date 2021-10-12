@@ -4,6 +4,7 @@ use proc_macro::TokenStream;
 use syn;
 
 mod derives;
+mod helpers;
 
 
 #[proc_macro_derive(InteractiveClap, attributes(interactive_clap))]

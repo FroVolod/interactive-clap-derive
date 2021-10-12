@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use proc_macro_error::abort_call_site;
 use syn;
 use quote::quote;
@@ -73,7 +74,31 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
             };
             gen.into()
         },
-        syn::Data::Enum(syn::DataEnum { variants:_, .. }) => todo!(),
+        syn::Data::Enum(syn::DataEnum { variants, .. }) => {
+            let enum_variants = variants.iter().map(|variant| {
+                let ident = &variant.ident;
+                let variant_name_string = crate::helpers::kebab_case::kebab_case(ident.to_string());
+                let variant_name = &syn::LitStr::new(&variant_name_string, Span::call_site());
+
+                quote! {
+                    Self::#ident(subcommand) => {
+                        let mut args = subcommand.to_cli_args();
+                        args.push_front(#variant_name.to_owned());
+                        args
+                    }
+                }
+            });
+            let gen = quote! {
+                impl #cli_name {
+                    pub fn to_cli_args(&self) -> std::collections::VecDeque<String> {
+                        match self {
+                            #( #enum_variants, )*
+                        }
+                    }
+                }
+            };
+            gen.into()
+        },
         _ => abort_call_site!("`#[derive(InteractiveClap)]` only supports structs and enums")
     }
 }
