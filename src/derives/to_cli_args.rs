@@ -80,13 +80,29 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
                 let variant_name_string = crate::helpers::kebab_case::kebab_case(ident.to_string());
                 let variant_name = &syn::LitStr::new(&variant_name_string, Span::call_site());
 
-                quote! {
-                    Self::#ident(subcommand) => {
-                        let mut args = subcommand.to_cli_args();
-                        args.push_front(#variant_name.to_owned());
-                        args
-                    }
+                match &variant.fields {
+                    syn::Fields::Unnamed(_) => {
+                        quote! {
+                            Self::#ident(subcommand) => {
+                                let mut args = subcommand.to_cli_args();
+                                args.push_front(#variant_name.to_owned());
+                                args
+                            }
+                        }
+                    },
+                    syn::Fields::Unit => {
+                        quote! {
+                            Self::#ident => {
+                                let mut args = std::collections::VecDeque::new();
+                                args.push_front(#variant_name.to_owned());
+                                args
+                            }
+                        }
+                    },
+                    _ => abort_call_site!("Only options `Fields::Unnamed` or `Fields::Unit` are needed")
                 }
+
+                
             });
             let gen = quote! {
                 impl #cli_name {
