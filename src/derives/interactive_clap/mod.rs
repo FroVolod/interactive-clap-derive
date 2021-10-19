@@ -6,6 +6,8 @@ use proc_macro_error::abort_call_site;
 use syn;
 use quote::{ToTokens,  quote};
 
+mod choose_variant;
+
 
 pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
@@ -28,22 +30,15 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         for attr_token in attr.tokens.clone() {
                             match attr_token {
                                 proc_macro2::TokenTree::Group(group) => {
-                                    for item in group.stream() {
-                                        match item {
-                                            proc_macro2::TokenTree::Ident(ident) => {
-                                                if ["subcommand", "long", "skip"].contains(&ident.to_string().as_str()) {
-                                                    clap_attr_vec.push(ident.to_string())
-                                                } else {
-                                                    continue;
-                                                };
-                                                if "skip".to_string() == ident.to_string() {
-                                                    ident_skip_field_vec.push(ident_field.clone());
-                                                    cli_field = quote! ()
-                                                };
-                                            },
-                                            _ => abort_call_site!("Only option `TokenTree::Ident` is needed")
-                                        };
-                                    }
+                                    if ["subcommand", "long", "skip"].contains(&group.stream().to_string().as_str()) {
+                                        clap_attr_vec.push(group.stream().to_string())
+                                    } else {
+                                        continue;
+                                    };
+                                    if "skip" == &group.stream().to_string() {
+                                        ident_skip_field_vec.push(ident_field.clone());
+                                        cli_field = quote! ()
+                                    };
                                 },
                                 _ => abort_call_site!("Only option `TokenTree::Group` is needed")
                             }
@@ -143,6 +138,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
             });
+            let choose_variant = choose_variant::choose_variant(ast, variants);
+
+
             let gen = quote! {
                 #[derive(Debug, Clone, clap::Clap, ToCliArgs)]
                 pub enum #cli_name {
@@ -159,6 +157,12 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                             #( #for_cli_enum_variants, )*
                         }
                     }
+                }
+
+                impl #name {
+                    pub fn choose_variant(context: crate::common::Context) -> color_eyre::eyre::Result<Self> {
+                        #choose_variant
+                    } 
                 }
             };
             gen.into()
