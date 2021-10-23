@@ -138,7 +138,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
             });
-            let choose_variant = choose_variant::choose_variant(ast, variants);
+            let fn_choose_variant = choose_variant::fn_choose_variant(ast, variants);
 
 
             let gen = quote! {
@@ -160,9 +160,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 }
 
                 impl #name {
-                    pub fn choose_variant(context: crate::common::Context) -> color_eyre::eyre::Result<Self> {
-                        #choose_variant
-                    } 
+                    #fn_choose_variant
                 }
             };
             gen.into()
