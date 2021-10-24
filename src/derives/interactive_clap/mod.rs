@@ -7,6 +7,7 @@ use syn;
 use quote::{ToTokens,  quote};
 
 mod choose_variant;
+mod from_cli_enum;
 
 
 pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
@@ -138,8 +139,10 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
             });
-            let fn_choose_variant = choose_variant::fn_choose_variant(ast, variants);
 
+            let fn_choose_variant = self::choose_variant::fn_choose_variant(ast, variants);
+
+            let fn_from_cli = self::from_cli_enum::fn_from_cli(ast, variants);
 
             let gen = quote! {
                 #[derive(Debug, Clone, clap::Clap, ToCliArgs)]
@@ -161,6 +164,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 impl #name {
                     #fn_choose_variant
+                    #fn_from_cli
                 }
             };
             gen.into()
