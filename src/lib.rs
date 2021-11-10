@@ -19,5 +19,5 @@ pub fn interactive_clap(input: TokenStream) -> TokenStream {
 #[proc_macro_error]
 pub fn to_cli_args(input: TokenStream) -> TokenStream {
     let ast = syn::parse_macro_input!(input);
-    derives:: to_cli_args::impl_to_cli_args(&ast)
+    derives::to_cli_args::impl_to_cli_args(&ast)
 }

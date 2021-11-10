@@ -47,7 +47,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                             },
                                             _ => String::new()
                                         };
-                                        let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}", &type_string), Span::call_site());
+                                        let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}For{}", &type_string, &name), Span::call_site());
                                         cli_field = quote! {
                                             pub #ident_field: Option<#enum_for_clap_named_arg>
                                         }
@@ -88,6 +88,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             .filter(|token_stream| !token_stream.is_empty());
 
             for field in fields.iter() {
+                let ident_field = &field.clone().ident.expect("this field does not exist");
+                let variant_name_string = crate::helpers::snake_case_to_camel_case::snake_case_to_camel_case(ident_field.to_string());
+                let variant_name = &syn::Ident::new(&variant_name_string, Span::call_site());
                 let mut attr_doc_vec = vec![quote! ()];
                 let mut attr_interactive_clap_vec = vec![quote! ()];
                 let ty = &field.ty;
@@ -115,24 +118,19 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                         },
                                         _ => String::new()
                                     };
-                                    let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}", &type_string), Span::call_site());
-                                    let field_for_clap_named_arg = syn::Ident::new(&type_string, Span::call_site());
-                                    if  !group.stream().to_string().contains("duplicate") {
-                                        clap_enum_for_named_arg = quote! {
-                                            #[derive(Debug, Clone, clap::Clap, ToCliArgs)]
-                                            pub enum #enum_for_clap_named_arg {
-                                                #(#attr_doc_vec)*
-                                                #field_for_clap_named_arg(<#ty as ToCli>::CliVariant)
-                                            }
+                                    let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}For{}", &type_string, &name), Span::call_site());
+                                    clap_enum_for_named_arg = quote! {
+                                        #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
+                                        pub enum #enum_for_clap_named_arg {
+                                            #(#attr_doc_vec)*
+                                            #variant_name(<#ty as ToCli>::CliVariant)
+                                        }
 
-                                            impl From<#ty> for #enum_for_clap_named_arg {
-                                                fn from(item: #ty) -> Self {
-                                                    Self::#field_for_clap_named_arg(<#ty as ToCli>::CliVariant::from(item))
-                                                }
+                                        impl From<#ty> for #enum_for_clap_named_arg {
+                                            fn from(item: #ty) -> Self {
+                                                Self::#variant_name(<#ty as ToCli>::CliVariant::from(item))
                                             }
-                                        };
-                                    } else {
-                                        clap_enum_for_named_arg = quote! ();
+                                        }
                                     };
                                 };
                             },
@@ -143,7 +141,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             };
 
             let gen = quote! {
-                #[derive(Debug, Default, Clone, clap::Clap, ToCliArgs)]
+                #[derive(Debug, Default, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
                 #[clap(
                     setting(clap::AppSettings::ColoredHelp),
                     setting(clap::AppSettings::DisableHelpSubcommand),
@@ -217,7 +215,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             let fn_from_cli = self::from_cli_enum::fn_from_cli(ast, variants);
 
             let gen = quote! {
-                #[derive(Debug, Clone, clap::Clap, ToCliArgs)]
+                #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
                 pub enum #cli_name {
                     #( #enum_variants, )*
                 }

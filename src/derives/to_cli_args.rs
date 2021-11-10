@@ -77,7 +77,7 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Enum(syn::DataEnum { variants, .. }) => {
             let enum_variants = variants.iter().map(|variant| {
                 let ident = &variant.ident;
-                let variant_name_string = crate::helpers::kebab_case::kebab_case(ident.to_string());
+                let variant_name_string = crate::helpers::camel_case_to_kebab_case::camel_case_to_kebab_case(ident.to_string());
                 let variant_name = &syn::LitStr::new(&variant_name_string, Span::call_site());
 
                 match &variant.fields {
