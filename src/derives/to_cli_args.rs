@@ -17,7 +17,7 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
             let mut args_push_front_vec = vec![quote!()];
             
             for field in data_struct.clone().fields.iter() {
-                let ident_field = &field.ident;
+                let ident_field = &field.ident.clone().expect("this field does not exist");
                 if field.attrs.is_empty() {
                     let args_push_front = quote!{
                         if let Some(arg) = &self.#ident_field {
@@ -43,10 +43,12 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
                                                                 .unwrap_or_default();
                                                         };
                                                     } else if "long".to_string() == ident.to_string() {
+                                                        let ident_field_to_kebab_case_string = crate::helpers::to_kebab_case::to_kebab_case(ident_field.to_string());
+                                                        let ident_field_to_kebab_case = &syn::LitStr::new(&ident_field_to_kebab_case_string, Span::call_site());
                                                         let args_push_front = quote!{
                                                             if let Some(arg) = &self.#ident_field {
                                                                 args.push_front(arg.to_string());
-                                                                args.push_front(std::concat!("--", std::stringify!(#ident_field)).to_string());
+                                                                args.push_front(std::concat!("--", #ident_field_to_kebab_case).to_string());
                                                             }
                                                         };
                                                         args_push_front_vec.push(args_push_front.clone());
@@ -77,7 +79,7 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Enum(syn::DataEnum { variants, .. }) => {
             let enum_variants = variants.iter().map(|variant| {
                 let ident = &variant.ident;
-                let variant_name_string = crate::helpers::camel_case_to_kebab_case::camel_case_to_kebab_case(ident.to_string());
+                let variant_name_string = crate::helpers::to_kebab_case::to_kebab_case(ident.to_string());
                 let variant_name = &syn::LitStr::new(&variant_name_string, Span::call_site());
 
                 match &variant.fields {
