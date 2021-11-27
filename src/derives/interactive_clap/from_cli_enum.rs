@@ -11,20 +11,65 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
     let cli_name = syn::Ident::new(&format!("Cli{}", name), Span::call_site());
 
     let mut context_dir = quote! ();
+    let mut input_context_dir = quote! ();
+    let mut output_context_dir = quote! ();
 
     let mut is_fn_from_default = false;
+
+
+    // let input_context_dir = ast.attrs
+    //     .iter()
+    //     .filter(|attr| attr.path.is_ident("interactive_clap"))
+    //     .map(|attr| {
+    //         let mut input_context_dir = quote! ();
+
+    //         for token_tree in attr.tokens.clone() {
+    //             match token_tree {
+    //                 proc_macro2::TokenTree::Group(group) => {
+    //                     if group.stream().to_string().contains("input_context") {
+    //                         let group_stream = &group.stream()
+    //                             .into_iter()
+    //                             // .enumerate()
+    //                             // // .filter(|&(i,_)| i != 0 || i != 1)
+    //                             // .map(|(_, v)| v)
+    //                             .collect::<Vec<_>>()[2..];
+    //                         input_context_dir = quote! {#(#group_stream)*}
+    //                     }
+    //                 }
+    //                 _ => () //abort_call_site!("Only option `TokenTree::Group` is needed")
+    //             }
+    //         };
+    //         input_context_dir     
+    //     })
+    //     .filter(|token_stream| !token_stream.is_empty())
+    //     .next()
+    //     .expect("input_context does not exist");
+    //     // .collect::<Vec<_>>();
+    // // let input_context = &input_context[2..];
+    // println!("!!!!!!!!!!!  input_context: {:#?}", &input_context_dir);
+
     
     for attr in ast.attrs.clone() {
         if attr.path.is_ident("interactive_clap".into()) {
             for attr_token in attr.tokens.clone() {
                 match attr_token {
                     proc_macro2::TokenTree::Group(group) => {
-                        if group.stream().to_string().contains("context") {
+                        if group.stream().to_string().contains("output_context") {
                             let group_stream = &group.stream()
                             .into_iter()
-                            .enumerate()
-                            .filter(|&(i,_)| i != 0 || i != 1)
-                            .map(|(_, v)| v)
+                            .collect::<Vec<_>>()[2..];
+                            output_context_dir = quote! {#(#group_stream)*};
+                        } else if group.stream().to_string().contains("input_context") {
+                            let group_stream = &group.stream()
+                            .into_iter()
+                            .collect::<Vec<_>>()[2..];
+                            input_context_dir = quote! {#(#group_stream)*};
+                        } else if group.stream().to_string().contains("context") {
+                            let group_stream = &group.stream()
+                            .into_iter()
+                            // .enumerate()
+                            // .filter(|&(i,_)| i != 0 || i != 1)
+                            // .map(|(_, v)| v)
                             .collect::<Vec<_>>()[2..];
                             context_dir = quote! {#(#group_stream)*};
                         };
@@ -95,11 +140,22 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
         }
         
     });
+
+    // let qwe = context_dir.is_empty();
+
+    let input_context = if let true = !context_dir.is_empty() {
+        context_dir
+    } else {
+        input_context_dir
+    };
     
+    // if !input_context_dir.is_empty() {
+    //     println!("=  =  =  =  =  input_context_dir: {:#?}", &input_context_dir);
+    // };
     quote! {
         pub fn from(
             optional_clap_variant: Option<#cli_name>,
-            context: #context_dir, // Заменить
+            context: #input_context,
         ) -> color_eyre::eyre::Result<Self> {
             match optional_clap_variant.and_then(|clap_variant| match clap_variant {
                 #(#from_cli_variants)*
@@ -110,3 +166,4 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
         }
     }
 }
+

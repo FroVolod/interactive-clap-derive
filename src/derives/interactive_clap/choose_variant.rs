@@ -14,6 +14,8 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
     let variant_ident = &variants[0].ident;
     let mut cli_variant = quote! ();
     let mut context_dir = quote! ();
+    let mut input_context_dir = quote! ();
+    let mut output_context_dir = quote! ();
 
     for attr in ast.attrs.clone() {
         if attr.path.is_ident("interactive_clap".into()) {
@@ -25,12 +27,28 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                                 let cli_variant = #cli_command::#variant_ident(Default::default());
                             };
                         };
-                        if group.stream().to_string().contains("context") {
+                        if group.stream().to_string().contains("output_context") {
                             let group_stream = &group.stream()
                                 .into_iter()
-                                .enumerate()
-                                .filter(|&(i,_)| i != 0 || i != 1)
-                                .map(|(_, v)| v)
+                                // .enumerate()
+                                // .filter(|&(i,_)| i != 0 || i != 1)
+                                // .map(|(_, v)| v)
+                                .collect::<Vec<_>>()[2..];
+                            output_context_dir = quote! {#(#group_stream)*};
+                        } else if group.stream().to_string().contains("input_context") {
+                            let group_stream = &group.stream()
+                                .into_iter()
+                                // .enumerate()
+                                // .filter(|&(i,_)| i != 0 || i != 1)
+                                // .map(|(_, v)| v)
+                                .collect::<Vec<_>>()[2..];
+                            input_context_dir = quote! {#(#group_stream)*};
+                        } else if group.stream().to_string().contains("context") {
+                            let group_stream = &group.stream()
+                                .into_iter()
+                                // .enumerate()
+                                // .filter(|&(i,_)| i != 0 || i != 1)
+                                // .map(|(_, v)| v)
                                 .collect::<Vec<_>>()[2..];
                             context_dir = quote! {#(#group_stream)*};
                         };
@@ -82,8 +100,15 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
         };
     };
 
+    let input_context = if let true = !context_dir.is_empty() {
+        context_dir
+    } else {
+        input_context_dir
+    };
+
+
     quote! {
-        pub fn choose_variant(context: #context_dir) -> color_eyre::eyre::Result<Self> {
+        pub fn choose_variant(context: #input_context) -> color_eyre::eyre::Result<Self> {
             #cli_variant
             Ok(Self::from(Some(cli_variant), context.clone())?)
         }
