@@ -1,10 +1,12 @@
 extern crate proc_macro;
 
+use std::net::SocketAddr;
+
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::abort_call_site;
 use syn;
-use quote::{ToTokens,  quote};
+use quote::{ToTokens, __private::ext::RepToTokensExt, quote};
 
 mod choose_variant;
 mod from_cli_enum;
@@ -16,14 +18,17 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
     let cli_name = &syn::Ident::new(&cli_name_string, Span::call_site());
     match &ast.data {
         syn::Data::Struct(data_struct) => {
-            let fields = data_struct.clone().fields;
-            let mut clap_enum_for_named_arg = quote! ();
+
+            
+            
+
+            let fields = data_struct.fields.clone();
             let mut ident_skip_field_vec: Vec<syn::Ident> = vec![];
 
             let cli_fields = fields.iter().map(|field| {
-                let ident_field = &field.clone().ident.expect("this field does not exist");
+                let ident_field = field.ident.clone().expect("this field does not exist");
                 let ty = &field.ty;
-                let mut cli_field = cli_field(ident_field, ty);
+                let mut cli_field = cli_field(&ident_field, ty);
                 if field.attrs.is_empty() {
                     return cli_field
                 };
@@ -87,58 +92,69 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             })
             .filter(|token_stream| !token_stream.is_empty());
 
-            for field in fields.iter() {
-                let ident_field = &field.clone().ident.expect("this field does not exist");
-                let variant_name_string = crate::helpers::snake_case_to_camel_case::snake_case_to_camel_case(ident_field.to_string());
-                let variant_name = &syn::Ident::new(&variant_name_string, Span::call_site());
-                let mut attr_doc_vec = vec![quote! ()];
-                let mut attr_interactive_clap_vec = vec![quote! ()];
-                let ty = &field.ty;
-                for attr in &field.attrs {
-                    if attr.path.is_ident("doc".into()) {
-                        attr_doc_vec.push(attr.into_token_stream());
-                        continue;
-                    };
-                    if attr.path.is_ident("interactive_clap".into()) {
-                        attr_interactive_clap_vec.push(attr.tokens.clone());
-                        
-                    };
-                };
-                for attr_interactive_clap in attr_interactive_clap_vec {
-                    for attr_token in attr_interactive_clap {
-                        match attr_token {
-                            proc_macro2::TokenTree::Group(group) => {
-                                if group.stream().to_string().contains("named_arg") {
-                                    let type_string = match ty {
-                                        syn::Type::Path(type_path) => {
-                                            match type_path.path.segments.last() {
-                                                Some(path_segment) => path_segment.ident.to_string(),
-                                                _ => String::new()
-                                            }
-                                        },
-                                        _ => String::new()
-                                    };
-                                    let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}For{}", &type_string, &name), Span::call_site());
-                                    clap_enum_for_named_arg = quote! {
-                                        #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
-                                        pub enum #enum_for_clap_named_arg {
-                                            #(#attr_doc_vec)*
-                                            #variant_name(<#ty as ToCli>::CliVariant)
-                                        }
+            let from_cli_fields = fields.iter().map(|field| {
+                from_cli_field(ast, field)                
+            })
+            .filter(|token_stream| !token_stream.is_empty());
 
-                                        impl From<#ty> for #enum_for_clap_named_arg {
-                                            fn from(item: #ty) -> Self {
-                                                Self::#variant_name(<#ty as ToCli>::CliVariant::from(item))
-                                            }
-                                        }
-                                    };
-                                };
-                            },
-                            _ => abort_call_site!("Only option `TokenTree::Group` is needed")
-                        }
-                    };
+            let clap_enum_for_named_arg =
+                if let Some(token_stream) = fields.iter().find_map(|field| {
+                    let ident_field = &field.clone().ident.expect("this field does not exist");
+                    let variant_name_string = crate::helpers::snake_case_to_camel_case::snake_case_to_camel_case(ident_field.to_string());
+                    let variant_name = &syn::Ident::new(&variant_name_string, Span::call_site());
+                    let attr_doc_vec: Vec<_> = field.attrs.iter()
+                        .filter(|attr| attr.path.is_ident("doc".into()))
+                        .map(|attr| attr.into_token_stream())
+                        .collect();
+                    
+                    field.attrs.iter()
+                        .filter(|attr| attr.path.is_ident("interactive_clap".into()))
+                        .map(|attr| attr.tokens.clone())
+                        .flatten()
+                        .filter(|attr_token| {
+                            match attr_token {
+                                proc_macro2::TokenTree::Group(group) => {
+                                    if group.stream().to_string().contains("named_arg") {
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
+                                _ => abort_call_site!("Only option `TokenTree::Group` is needed")
+                            }
+                        })
+                        .map(|_| {
+                            let ty = &field.ty;
+                            let type_string = match ty {
+                                syn::Type::Path(type_path) => {
+                                    match type_path.path.segments.last() {
+                                        Some(path_segment) => path_segment.ident.to_string(),
+                                        _ => String::new()
+                                    }
+                                },
+                                _ => String::new()
+                            };
+                            let enum_for_clap_named_arg = syn::Ident::new(&format!("ClapNamedArg{}For{}", &type_string, &name), Span::call_site());
+                            quote! {
+                                #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
+                                pub enum #enum_for_clap_named_arg {
+                                    #(#attr_doc_vec)*
+                                    #variant_name(<#ty as ToCli>::CliVariant)
+                                }
+
+                                impl From<#ty> for #enum_for_clap_named_arg {
+                                    fn from(item: #ty) -> Self {
+                                        Self::#variant_name(<#ty as ToCli>::CliVariant::from(item))
+                                    }
+                                }
+                            }
+                        })
+                        .next()
+                }) {
+                    token_stream
+                } else {
+                    quote! ()
                 };
-            };
 
             let gen = quote! {
                 #[derive(Debug, Default, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
@@ -154,6 +170,22 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 impl interactive_clap::ToCli for #name {
                     type CliVariant = #cli_name;
                 }
+
+                //--------------------------------
+
+                // impl #name {
+                //     pub fn from(
+                //         optional_clap_variant: Option<#cli_name>,
+                //         context: crate::common::Context,
+                //     ) -> color_eyre::eyre::Result<Self> {
+
+                //         Ok(Self {
+                //             #( #from_cli_fields, )*
+                //         })
+                //     }
+                // }
+
+                //--------------------------------
 
                 impl From<#name> for #cli_name {
                     fn from(args: #name) -> Self {
@@ -209,6 +241,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
             });
+
 
             let fn_choose_variant = self::choose_variant::fn_choose_variant(ast, variants);
 
@@ -300,4 +333,95 @@ fn for_cli_field(field: &syn::Field, ident_skip_field_vec: &Vec<syn::Ident>) -> 
             _ => abort_call_site!("Only option `Type::Path` is needed")
         }
     }
+}
+
+fn from_cli_field(ast: &syn::DeriveInput, field: &syn::Field,) -> proc_macro2::TokenStream {
+    for attr in &ast.attrs {
+                
+        if attr.path.is_ident("interactive_clap".into()) {
+
+            for attr_token in attr.tokens.clone() {
+                match attr_token {
+                    proc_macro2::TokenTree::Group(group) => {
+                        if group.to_string().contains("context") {
+                            let ident_context = &group.stream().to_string();
+                            let ident_context_vec: Vec<&str> = ident_context
+                                .split(",")
+                                .map(|s| s.trim())
+                                .collect();
+                            println!("++++++++  ident_context: {:#?}", ident_context_vec);
+
+                            for item in group.stream() {
+                                match item {
+                                    proc_macro2::TokenTree::Ident(ident) => {
+                                        
+                                        if "input_context".to_string() == ident.to_string() {
+                                            let input_context = &group.stream().to_string();
+                                            let input_context_vec: Vec<&str> = input_context
+                                                .split("input_context")
+                                                .collect();
+                                            println!("---------  input_context: {:#?}", input_context_vec);
+                                        }
+                                        if "output_context".to_string() == ident.to_string() {
+                                            println!("---------  output_context: {:#?}", &group.to_string().split_once("output_context").unwrap());
+                                        }
+                                        if "context".to_string() == ident.to_string() {
+                                            println!("---------  context: {:#?}", &group.to_string().split_once("context").unwrap());
+                                        }
+
+                                    },
+                                    _ => () //abort_call_site!("Only option `TokenTree::Ident` is needed")
+                                };
+                            };
+                        }
+
+                        
+                    },
+                    _ => abort_call_site!("Only option `TokenTree::Group` is needed")
+                }
+            };
+
+        };
+    };
+
+    // не subcommand
+    quote! {
+        allowance: match optional_clap_variant
+            .clone()
+            .and_then(|clap_variant| clap_variant.allowance)
+        {
+            Some(cli_allowance) => Some(cli_allowance.to_yoctonear()),
+            None => FunctionCallType::input_allowance(),
+        };
+    };
+
+    // subcommand с неизмененным contet
+    quote! {
+        currency_selection: match optional_clap_variant.and_then(|clap_variant| clap_variant.currency_selection) {
+            Some(cli_currency_selection) => {
+                CurrencySelection::from(Some(cli_currency_selection), context)?
+            }
+            None => CurrencySelection::choose_variant(context)?,
+        }
+    };
+
+    // subcommand с изменееным context
+    quote! {
+        public_key_mode: {
+            type Alias = <Sender as crate::common::ToInteractiveClapContextScope>::InteractiveClapContextScope;
+            let new_context_scope = Alias {
+                sender_account_id
+            };
+            let new_context /*: SignerContext */ = SenderContext::from_previous_context(context, &new_context_scope);
+            let public_key_mode = super::public_key_mode::PublicKeyMode::from(
+                optional_clap_variant.and_then(|clap_variant| clap_variant.public_key_mode),
+                &new_context,
+            )?
+        }
+    };
+
+    quote! {}
+    
+
+
 }

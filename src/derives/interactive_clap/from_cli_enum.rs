@@ -132,8 +132,19 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
         match &variant.fields {
             syn::Fields::Unnamed(fields) => {
                 let ty = &fields.unnamed[0].ty;
-                quote! {
-                    #cli_name::#variant_ident(args) => Some(Self::#variant_ident(#ty::from(Some(args), context.clone()).ok()?,)),
+                let context_name = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
+                match output_context_dir.is_empty() {
+                    true => quote! {
+                        #cli_name::#variant_ident(args) => Some(Self::#variant_ident(#ty::from(Some(args), context.clone()).ok()?,)),
+                    },
+                    false => quote! {
+                        #cli_name::#variant_ident(args) => {
+                            type Alias = <#name as crate::common::ToInteractiveClapContextScope>::InteractiveClapContextScope;
+                            let new_context_scope = Alias::#variant_ident;
+                            let new_context = #context_name::from_previous_context((), new_context_scope);
+                            Some(Self::#variant_ident(#ty::from(Some(args), new_context.clone()).ok()?,))
+                        }
+                    }
                 }
             },
             _ => abort_call_site!("Only option `Fields::Unnamed` is needed")
@@ -149,8 +160,8 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
         input_context_dir
     };
     
-    // if !input_context_dir.is_empty() {
-    //     println!("=  =  =  =  =  input_context_dir: {:#?}", &input_context_dir);
+    // if !output_context_dir.is_empty() {
+    //     println!("=  =  =  =  =  output_context_dir: {:#?}", &output_context_dir);
     // };
     quote! {
         pub fn from(
