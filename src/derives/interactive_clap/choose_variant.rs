@@ -15,7 +15,6 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
     let mut cli_variant = quote! ();
     let mut context_dir = quote! ();
     let mut input_context_dir = quote! ();
-    let mut output_context_dir = quote! ();
 
     for attr in ast.attrs.clone() {
         if attr.path.is_ident("interactive_clap".into()) {
@@ -28,13 +27,7 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                             };
                         };
                         if group.stream().to_string().contains("output_context") {
-                            let group_stream = &group.stream()
-                                .into_iter()
-                                // .enumerate()
-                                // .filter(|&(i,_)| i != 0 || i != 1)
-                                // .map(|(_, v)| v)
-                                .collect::<Vec<_>>()[2..];
-                            output_context_dir = quote! {#(#group_stream)*};
+                            continue;
                         } else if group.stream().to_string().contains("input_context") {
                             let group_stream = &group.stream()
                                 .into_iter()

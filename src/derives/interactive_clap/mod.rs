@@ -97,6 +97,46 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             })
             .filter(|token_stream| !token_stream.is_empty());
 
+            let context_scope_fields = fields.iter().map(|field| {
+                let ident_field = &field.ident.clone().expect("this field does not exist");
+                let ty = &field.ty;
+                if field.attrs.is_empty() {
+                    quote! {
+                        pub #ident_field: #ty
+                    }
+                } else {
+                    match field.attrs.iter()
+                    .filter(|attr| attr.path.is_ident("interactive_clap".into()))
+                    .map(|attr| attr.tokens.clone())
+                    .flatten()
+                    .filter(|attr_token| {
+                        match attr_token {
+                            proc_macro2::TokenTree::Group(group) => {
+                                if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("named_arg") | group.stream().to_string().contains("skip") {
+                                    false
+                                } else {
+                                    true
+                                }
+                            },
+                            _ => abort_call_site!("Only option `TokenTree::Group` is needed")
+                        }
+                    })
+                    .map(|_| {
+                        quote! {
+                            pub #ident_field: #ty
+                        }
+                    })
+                    .next() {
+                        Some(token_stream) => token_stream,
+                        None => quote! ()
+                    }
+                }
+                
+            })
+            .filter(|token_stream| !token_stream.is_empty())
+            .collect::<Vec<_>>();
+            let context_scope_for_struct = context_scope_for_struct(&name, context_scope_fields);
+
             let clap_enum_for_named_arg =
                 if let Some(token_stream) = fields.iter().find_map(|field| {
                     let ident_field = &field.clone().ident.expect("this field does not exist");
@@ -171,6 +211,8 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     type CliVariant = #cli_name;
                 }
 
+                #context_scope_for_struct
+
                 //--------------------------------
 
                 // impl #name {
@@ -242,6 +284,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
             });
 
+            let scope_for_enum = context_scope_for_enum(name);
 
             let fn_choose_variant = self::choose_variant::fn_choose_variant(ast, variants);
 
@@ -257,6 +300,8 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     type CliVariant = #cli_name;
                 }
 
+                #scope_for_enum
+                
                 impl From<#name> for #cli_name {
                     fn from(command: #name) -> Self {
                         match command {
@@ -264,7 +309,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         }
                     }
                 }
-
+                
                 impl #name {
                     #fn_choose_variant
                     #fn_from_cli
@@ -273,6 +318,29 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             gen.into()
         }
         _ => abort_call_site!("`#[derive(InteractiveClap)]` only supports structs and enums")
+    }
+}
+
+fn context_scope_for_struct(name: &syn::Ident, context_scope_fields: Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+    let interactive_clap_context_scope_for_struct = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
+    quote! {
+        pub struct #interactive_clap_context_scope_for_struct {
+            #(#context_scope_fields,)*
+        }
+        impl interactive_clap::ToInteractiveClapContextScope for #name {
+            type InteractiveClapContextScope = #interactive_clap_context_scope_for_struct;
+        }
+    }
+}
+
+fn context_scope_for_enum(name: &syn::Ident) -> proc_macro2::TokenStream {
+    let interactive_clap_context_scope_for_enum = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
+    let enum_discriminants = syn::Ident::new(&format!("{}Discriminants", &name), Span::call_site());
+    quote! {
+        pub type #interactive_clap_context_scope_for_enum = #enum_discriminants;
+        impl interactive_clap::ToInteractiveClapContextScope for #name {
+                    type InteractiveClapContextScope = #interactive_clap_context_scope_for_enum;
+                }
     }
 }
 
@@ -335,7 +403,7 @@ fn for_cli_field(field: &syn::Field, ident_skip_field_vec: &Vec<syn::Ident>) -> 
     }
 }
 
-fn from_cli_field(ast: &syn::DeriveInput, field: &syn::Field,) -> proc_macro2::TokenStream {
+fn from_cli_field(ast: &syn::DeriveInput, field: &syn::Field) -> proc_macro2::TokenStream {
     for attr in &ast.attrs {
                 
         if attr.path.is_ident("interactive_clap".into()) {
