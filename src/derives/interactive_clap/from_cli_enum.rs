@@ -61,15 +61,15 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
                 let context_name = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
                 if output_context_dir.is_empty() {
                     quote! {
-                        #cli_name::#variant_ident(args) => Some(Self::#variant_ident(#ty::from(Some(args), context.clone()).ok()?,)),
+                        Some(#cli_name::#variant_ident(args)) => Ok(Self::#variant_ident(#ty::from(Some(args), context.clone())?,)),
                     }
                 } else {
                     quote! {
-                        #cli_name::#variant_ident(args) => {
+                        Some(#cli_name::#variant_ident(args)) => {
                             type Alias = <#name as ToInteractiveClapContextScope>::InteractiveClapContextScope;
                             let new_context_scope = Alias::#variant_ident;
                             let new_context = #context_name::from_previous_context((), new_context_scope);
-                            Some(Self::#variant_ident(#ty::from(Some(args), new_context).ok()?,))
+                            Ok(Self::#variant_ident(#ty::from(Some(args), new_context)?,))
                         }
                     }
                 }
@@ -90,13 +90,10 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
             optional_clap_variant: Option<#cli_name>,
             context: #input_context,
         ) -> color_eyre::eyre::Result<Self> {
-            match optional_clap_variant.and_then(|clap_variant| match clap_variant {
+            match optional_clap_variant {
                 #(#from_cli_variants)*
-            }) {
-                Some(variant) => Ok(variant),
-                None => Self::choose_variant(context.clone()),
-            }                 
+                None => Self::choose_variant(context.clone()),                             
+            }
         }
     }
 }
-
