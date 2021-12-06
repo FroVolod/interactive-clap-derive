@@ -9,7 +9,8 @@ use syn;
 use quote::{ToTokens, __private::ext::RepToTokensExt, quote};
 
 mod choose_variant;
-mod from_cli_enum;
+mod from_cli_for_enum;
+mod from_cli_for_struct;
 
 
 pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
@@ -18,10 +19,6 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
     let cli_name = &syn::Ident::new(&cli_name_string, Span::call_site());
     match &ast.data {
         syn::Data::Struct(data_struct) => {
-
-            
-            
-
             let fields = data_struct.fields.clone();
             let mut ident_skip_field_vec: Vec<syn::Ident> = vec![];
 
@@ -92,46 +89,10 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             })
             .filter(|token_stream| !token_stream.is_empty());
 
-            let from_cli_fields = fields.iter().map(|field| {
-                from_cli_field(ast, field)                
-            })
-            .filter(|token_stream| !token_stream.is_empty());
+            let fn_from_cli_for_struct = self::from_cli_for_struct::from_cli_for_struct(&ast, &fields);
 
             let context_scope_fields = fields.iter().map(|field| {
-                let ident_field = &field.ident.clone().expect("this field does not exist");
-                let ty = &field.ty;
-                if field.attrs.is_empty() {
-                    quote! {
-                        pub #ident_field: #ty
-                    }
-                } else {
-                    match field.attrs.iter()
-                    .filter(|attr| attr.path.is_ident("interactive_clap".into()))
-                    .map(|attr| attr.tokens.clone())
-                    .flatten()
-                    .filter(|attr_token| {
-                        match attr_token {
-                            proc_macro2::TokenTree::Group(group) => {
-                                if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("named_arg") | group.stream().to_string().contains("skip") {
-                                    false
-                                } else {
-                                    true
-                                }
-                            },
-                            _ => abort_call_site!("Only option `TokenTree::Group` is needed")
-                        }
-                    })
-                    .map(|_| {
-                        quote! {
-                            pub #ident_field: #ty
-                        }
-                    })
-                    .next() {
-                        Some(token_stream) => token_stream,
-                        None => quote! ()
-                    }
-                }
-                
+                context_scope_for_struct_field(field)
             })
             .filter(|token_stream| !token_stream.is_empty())
             .collect::<Vec<_>>();
@@ -213,21 +174,11 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 #context_scope_for_struct
 
-                //--------------------------------
+                impl #name {
+                    #fn_from_cli_for_struct
+                }
 
-                // impl #name {
-                //     pub fn from(
-                //         optional_clap_variant: Option<#cli_name>,
-                //         context: crate::common::Context,
-                //     ) -> color_eyre::eyre::Result<Self> {
 
-                //         Ok(Self {
-                //             #( #from_cli_fields, )*
-                //         })
-                //     }
-                // }
-
-                //--------------------------------
 
                 impl From<#name> for #cli_name {
                     fn from(args: #name) -> Self {
@@ -288,7 +239,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
             let fn_choose_variant = self::choose_variant::fn_choose_variant(ast, variants);
 
-            let fn_from_cli = self::from_cli_enum::fn_from_cli(ast, variants);
+            let fn_from_cli_for_enum = self::from_cli_for_enum::from_cli_for_enum(ast, variants);
 
             let gen = quote! {
                 #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
@@ -312,7 +263,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 
                 impl #name {
                     #fn_choose_variant
-                    #fn_from_cli
+                    #fn_from_cli_for_enum
                 }
             };
             gen.into()
@@ -329,6 +280,42 @@ fn context_scope_for_struct(name: &syn::Ident, context_scope_fields: Vec<proc_ma
         }
         impl interactive_clap::ToInteractiveClapContextScope for #name {
             type InteractiveClapContextScope = #interactive_clap_context_scope_for_struct;
+        }
+    }
+}
+
+fn context_scope_for_struct_field(field: &syn::Field) -> proc_macro2::TokenStream {
+    let ident_field = &field.ident.clone().expect("this field does not exist");
+    let ty = &field.ty;
+    if field.attrs.is_empty() {
+        quote! {
+            pub #ident_field: #ty
+        }
+    } else {
+        match field.attrs.iter()
+        .filter(|attr| attr.path.is_ident("interactive_clap".into()))
+        .map(|attr| attr.tokens.clone())
+        .flatten()
+        .filter(|attr_token| {
+            match attr_token {
+                proc_macro2::TokenTree::Group(group) => {
+                    if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("named_arg") | group.stream().to_string().contains("skip") {
+                        false
+                    } else {
+                        true
+                    }
+                },
+                _ => abort_call_site!("Only option `TokenTree::Group` is needed")
+            }
+        })
+        .map(|_| {
+            quote! {
+                pub #ident_field: #ty
+            }
+        })
+        .next() {
+            Some(token_stream) => token_stream,
+            None => quote! ()
         }
     }
 }
@@ -403,93 +390,4 @@ fn for_cli_field(field: &syn::Field, ident_skip_field_vec: &Vec<syn::Ident>) -> 
     }
 }
 
-fn from_cli_field(ast: &syn::DeriveInput, field: &syn::Field) -> proc_macro2::TokenStream {
-    for attr in &ast.attrs {
-                
-        if attr.path.is_ident("interactive_clap".into()) {
 
-            for attr_token in attr.tokens.clone() {
-                match attr_token {
-                    proc_macro2::TokenTree::Group(group) => {
-                        if group.to_string().contains("context") {
-                            let ident_context = &group.stream().to_string();
-                            let ident_context_vec: Vec<&str> = ident_context
-                                .split(",")
-                                .map(|s| s.trim())
-                                .collect();
-                            println!("++++++++  ident_context: {:#?}", ident_context_vec);
-
-                            for item in group.stream() {
-                                match item {
-                                    proc_macro2::TokenTree::Ident(ident) => {
-                                        
-                                        if "input_context".to_string() == ident.to_string() {
-                                            let input_context = &group.stream().to_string();
-                                            let input_context_vec: Vec<&str> = input_context
-                                                .split("input_context")
-                                                .collect();
-                                            println!("---------  input_context: {:#?}", input_context_vec);
-                                        }
-                                        if "output_context".to_string() == ident.to_string() {
-                                            println!("---------  output_context: {:#?}", &group.to_string().split_once("output_context").unwrap());
-                                        }
-                                        if "context".to_string() == ident.to_string() {
-                                            println!("---------  context: {:#?}", &group.to_string().split_once("context").unwrap());
-                                        }
-
-                                    },
-                                    _ => () //abort_call_site!("Only option `TokenTree::Ident` is needed")
-                                };
-                            };
-                        }
-
-                        
-                    },
-                    _ => abort_call_site!("Only option `TokenTree::Group` is needed")
-                }
-            };
-
-        };
-    };
-
-    // не subcommand
-    quote! {
-        allowance: match optional_clap_variant
-            .clone()
-            .and_then(|clap_variant| clap_variant.allowance)
-        {
-            Some(cli_allowance) => Some(cli_allowance.to_yoctonear()),
-            None => FunctionCallType::input_allowance(),
-        };
-    };
-
-    // subcommand с неизмененным contet
-    quote! {
-        currency_selection: match optional_clap_variant.and_then(|clap_variant| clap_variant.currency_selection) {
-            Some(cli_currency_selection) => {
-                CurrencySelection::from(Some(cli_currency_selection), context)?
-            }
-            None => CurrencySelection::choose_variant(context)?,
-        }
-    };
-
-    // subcommand с изменееным context
-    quote! {
-        public_key_mode: {
-            type Alias = <Sender as crate::common::ToInteractiveClapContextScope>::InteractiveClapContextScope;
-            let new_context_scope = Alias {
-                sender_account_id
-            };
-            let new_context /*: SignerContext */ = SenderContext::from_previous_context(context, &new_context_scope);
-            let public_key_mode = super::public_key_mode::PublicKeyMode::from(
-                optional_clap_variant.and_then(|clap_variant| clap_variant.public_key_mode),
-                &new_context,
-            )?
-        }
-    };
-
-    quote! {}
-    
-
-
-}

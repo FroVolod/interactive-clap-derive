@@ -6,7 +6,7 @@ use syn;
 use quote::quote;
 
 
-pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>) -> proc_macro2::TokenStream {
+pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>) -> proc_macro2::TokenStream {
     let name = &ast.ident;
     let cli_name = syn::Ident::new(&format!("Cli{}", name), Span::call_site());
 
@@ -39,7 +39,7 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
                             .collect::<Vec<_>>()[2..];
                             context_dir = quote! {#(#group_stream)*};
                         };
-                        if group.stream().to_string().contains("fn_from") && group.stream().to_string().contains("default") {
+                        if group.stream().to_string().contains("fn_from_cli") && group.stream().to_string().contains("default") {
                             is_fn_from_default = true;
                         };
                     }
@@ -68,7 +68,7 @@ pub fn fn_from_cli(ast: &syn::DeriveInput, variants: &syn::punctuated::Punctuate
                         Some(#cli_name::#variant_ident(args)) => {
                             type Alias = <#name as ToInteractiveClapContextScope>::InteractiveClapContextScope;
                             let new_context_scope = Alias::#variant_ident;
-                            let new_context = #context_name::from_previous_context((), new_context_scope);
+                            let new_context = #context_name::from_previous_context((), &new_context_scope);
                             Ok(Self::#variant_ident(#ty::from(Some(args), new_context)?,))
                         }
                     }
