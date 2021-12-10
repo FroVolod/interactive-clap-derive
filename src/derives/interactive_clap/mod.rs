@@ -140,12 +140,12 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                 #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
                                 pub enum #enum_for_clap_named_arg {
                                     #(#attr_doc_vec)*
-                                    #variant_name(<#ty as ToCli>::CliVariant)
+                                    #variant_name(<#ty as interactive_clap::ToCli>::CliVariant)
                                 }
 
                                 impl From<#ty> for #enum_for_clap_named_arg {
                                     fn from(item: #ty) -> Self {
-                                        Self::#variant_name(<#ty as ToCli>::CliVariant::from(item))
+                                        Self::#variant_name(<#ty as interactive_clap::ToCli>::CliVariant::from(item))
                                     }
                                 }
                             }
@@ -207,12 +207,12 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         syn::Fields::Unnamed(fields) => {
                             let ty = &fields.unnamed[0].ty;
                             if attrs.is_empty() {
-                                quote! {#ident(<#ty as ToCli>::CliVariant)}
+                                quote! {#ident(<#ty as interactive_clap::ToCli>::CliVariant)}
                             } else {
                                 let attr = attrs.iter().next().unwrap();
                                 quote! {
                                     #attr
-                                    #ident(<#ty as ToCli>::CliVariant)
+                                    #ident(<#ty as interactive_clap::ToCli>::CliVariant)
                                 }
                             }
                         },
@@ -222,7 +222,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                     match &variant.fields {
                         syn::Fields::Unnamed(fields) => {
                             let ty = &fields.unnamed[0].ty;
-                            quote! { #ident(<#ty as ToCli>::CliVariant) }
+                            quote! { #ident(<#ty as interactive_clap::ToCli>::CliVariant) }
                             
                         },
                         _ => abort_call_site!("Only option `Fields::Unnamed` is needed")
@@ -341,18 +341,18 @@ fn cli_field(ident_field: &syn::Ident, ty: &syn::Type) -> proc_macro2::TokenStre
                             syn::PathArguments::AngleBracketed(gen_args) => {
                                 let ty_option = &gen_args.args;
                                 quote! {
-                                    pub #ident_field: Option<<#ty_option as ToCli>::CliVariant>
+                                    pub #ident_field: Option<<#ty_option as interactive_clap::ToCli>::CliVariant>
                                 }
                             },
                             _ => {
                                 quote! {
-                                    pub #ident_field: Option<<#ty as ToCli>::CliVariant>
+                                    pub #ident_field: Option<<#ty as interactive_clap::ToCli>::CliVariant>
                                 }
                             },
                         }
                     } else {
                         quote! {
-                            pub #ident_field: Option<<#ty as ToCli>::CliVariant>
+                            pub #ident_field: Option<<#ty as interactive_clap::ToCli>::CliVariant>
                         }
                     }
                 },
