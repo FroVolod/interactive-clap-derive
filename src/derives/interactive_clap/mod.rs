@@ -1,12 +1,10 @@
 extern crate proc_macro;
 
-use std::net::SocketAddr;
-
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_error::abort_call_site;
 use syn;
-use quote::{ToTokens, __private::ext::RepToTokensExt, quote};
+use quote::{ToTokens, quote};
 
 mod choose_variant;
 mod from_cli_for_enum;
