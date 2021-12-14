@@ -32,7 +32,7 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
                                 match attr_token {
                                     proc_macro2::TokenTree::Group(group) => {
                                         for item in group.stream() {
-                                            match item {
+                                            match &item {
                                                 proc_macro2::TokenTree::Ident(ident) => {
                                                     if "subcommand".to_string() == ident.to_string() {
                                                         args_subcommand = quote! {
@@ -53,6 +53,16 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
                                                         };
                                                         args_push_front_vec.push(args_push_front.clone());
                                                     }
+                                                },
+                                                proc_macro2::TokenTree::Literal(literal) =>{
+                                                    let args_push_front = quote!{
+                                                            if let Some(arg) = &self.#ident_field {
+                                                                args.push_front(arg.to_string());
+                                                                args.push_front(std::concat!("--", #literal).to_string());
+                                                            }
+                                                        };
+                                                    args_push_front_vec.pop();
+                                                    args_push_front_vec.push(args_push_front.clone());
                                                 },
                                                 _ => () //abort_call_site!("Only option `TokenTree::Ident` is needed")
                                             };
