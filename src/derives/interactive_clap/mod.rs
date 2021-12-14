@@ -216,7 +216,11 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                 }
                             }
                         },
-                        _ => abort_call_site!("Only option `Fields::Unnamed` is needed")
+                        syn::Fields::Unit => {
+                            
+                            quote! { #ident }
+                        },
+                        _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
                     }
                 } else {
                     match &variant.fields {
@@ -225,14 +229,24 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                             quote! { #ident(<#ty as interactive_clap::ToCli>::CliVariant) }
                             
                         },
-                        _ => abort_call_site!("Only option `Fields::Unnamed` is needed")
+                        syn::Fields::Unit => {
+                            quote! { #ident }
+                        },
+                        _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
                     }
                 }
             });
             let for_cli_enum_variants = variants.iter().map(|variant| {
                 let ident = &variant.ident;
-
-                quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
+                match &variant.fields {
+                    syn::Fields::Unnamed(_) => {
+                        quote! { #name::#ident(arg) => Self::#ident(arg.into()) }
+                    },
+                    syn::Fields::Unit => {
+                        quote! { #name::#ident => Self::#ident }
+                    },
+                    _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
+                }
             });
 
             let scope_for_enum = context_scope_for_enum(name);

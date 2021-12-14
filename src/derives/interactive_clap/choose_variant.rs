@@ -22,9 +22,22 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                 match attr_token {
                     proc_macro2::TokenTree::Group(group) => {
                         if group.stream().to_string().contains("disable_strum_discriminants").clone() {
-                            cli_variant = quote! {
-                                let cli_variant = #cli_command::#variant_ident(Default::default());
-                            };
+
+                            match &variants[0].fields {
+                                syn::Fields::Unnamed(_) => {
+                                    cli_variant = quote! {
+                                        let cli_variant = #cli_command::#variant_ident(Default::default());
+                                    };
+                                },
+                                syn::Fields::Unit => {
+                                    cli_variant = quote! {
+                                        let cli_variant = #cli_command::#variant_ident;
+                                    };
+                                },
+                                _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
+                            }
+            
+                            
                         };
                         if group.stream().to_string().contains("output_context") {
                             continue;
@@ -75,9 +88,22 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
 
                             let enum_variants = variants.iter().map(|variant| {
                                 let variant_ident = &variant.ident;
-                                quote! {
-                                    #command_discriminants::#variant_ident => #cli_command::#variant_ident(Default::default())
+
+                                match &variant.fields {
+                                    syn::Fields::Unnamed(_) => {
+                                        quote! {
+                                            #command_discriminants::#variant_ident => #cli_command::#variant_ident(Default::default())
+                                        }
+                                    },
+                                    syn::Fields::Unit => {
+                                        quote! {
+                                            #command_discriminants::#variant_ident => #cli_command::#variant_ident
+                                        }
+                                    },
+                                    _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
                                 }
+                
+                                
                             });
                             
                             cli_variant = quote! {

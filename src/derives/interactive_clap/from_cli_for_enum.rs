@@ -74,7 +74,12 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                     }
                 }
             },
-            _ => abort_call_site!("Only option `Fields::Unnamed` is needed")
+            syn::Fields::Unit => {
+                quote! {
+                    Some(#cli_name::#variant_ident) => Ok(Self::#variant_ident),
+                }
+            },
+            _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
         }
         
     });
