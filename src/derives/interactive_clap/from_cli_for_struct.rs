@@ -63,7 +63,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
 
     let field_value_named_arg = 
         if let Some(token_stream) = fields.iter().map(|field| {
-            field_value_named_arg(name, field, &output_context_dir, &fields_without_subcommand)                
+            field_value_named_arg(name, field, &output_context_dir)                
         })
         .filter(|token_stream| !token_stream.is_empty())
         .next()
@@ -75,7 +75,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
 
     let field_value_subcommand = 
         if let Some(token_stream) = fields.iter().map(|field| {
-            field_value_subcommand(name, field, &output_context_dir, &fields_without_subcommand)                
+            field_value_subcommand(name, field, &output_context_dir)                
         })
         .filter(|token_stream| !token_stream.is_empty())
         .next()
@@ -86,13 +86,18 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
         };
 
     let struct_fields = fields.iter().map(|field| {
-        struct_field(field, &output_context_dir, &fields_without_subcommand)                
+        struct_field(field, &fields_without_subcommand)                
     });
 
     let input_context = if let true = !context_dir.is_empty() {
         context_dir
     } else {
         input_context_dir
+    };
+
+    let interactive_clap_context_scope_for_struct = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
+    let new_context_scope = quote! {
+        let new_context_scope = #interactive_clap_context_scope_for_struct { #(#fields_without_subcommand,)* };
     };
     
     quote! {
@@ -101,6 +106,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
             context: #input_context,
         ) -> color_eyre::eyre::Result<Self> {
             #(#fields_value)*
+            #new_context_scope
             #field_value_named_arg
             #field_value_subcommand
             Ok(Self{ #(#struct_fields,)* })
@@ -188,7 +194,7 @@ fn fields_value(field: &syn::Field) -> proc_macro2::TokenStream {
     }
 }
 
-fn field_value_named_arg(name: &syn::Ident, field: &syn::Field, output_context_dir: &proc_macro2::TokenStream, fields_without_subcommand: &Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+fn field_value_named_arg(name: &syn::Ident, field: &syn::Field, output_context_dir: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
     let ty = &field.ty;
     if field.attrs.is_empty() {
@@ -234,10 +240,8 @@ fn field_value_named_arg(name: &syn::Ident, field: &syn::Field, output_context_d
                     )?;
                 }
             } else {
-                let interactive_clap_context_scope_for_struct = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
                 let context_for_struct = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
                 quote! {
-                    let new_context_scope = #interactive_clap_context_scope_for_struct { #(#fields_without_subcommand,)* };
                     let new_context = #context_for_struct::from_previous_context(context, &new_context_scope);
                     let #ident_field = #ty::from(
                         optional_clap_variant.and_then(|clap_variant| match clap_variant.#ident_field {
@@ -256,7 +260,7 @@ fn field_value_named_arg(name: &syn::Ident, field: &syn::Field, output_context_d
     }
 }
 
-fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_dir: &proc_macro2::TokenStream, fields_without_subcommand: &Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_dir: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
     let ty = &field.ty;
     if field.attrs.is_empty() {
@@ -287,10 +291,8 @@ fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_
                     };
                 }
             } else {
-                let interactive_clap_context_scope_for_struct = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
                 let context_for_struct = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
                 quote! {
-                    let new_context_scope = #interactive_clap_context_scope_for_struct { #(#fields_without_subcommand,)* };
                     let new_context = #context_for_struct::from_previous_context(context, &new_context_scope);
                     let #ident_field = match optional_clap_variant.and_then(|clap_variant| clap_variant.#ident_field) {
                         Some(cli_arg) => #ty::from(Some(cli_arg), new_context)?,
@@ -306,18 +308,12 @@ fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_
     }
 }
 
-fn struct_field(field: &syn::Field, output_context_dir: &proc_macro2::TokenStream, fields_without_subcommand: &Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+fn struct_field(field: &syn::Field, fields_without_subcommand: &Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
     let fields_without_subcommand_to_string = fields_without_subcommand.iter().map(|token_stream| token_stream.to_string()).collect::<Vec<_>>();
     if fields_without_subcommand_to_string.contains(&ident_field.to_string()) {
-        if output_context_dir.is_empty() {
-            quote! {
-                #ident_field
-            }
-        } else {
-            quote! {
-                #ident_field: new_context_scope.#ident_field
-            }
+        quote! {
+            #ident_field: new_context_scope.#ident_field
         }
     } else {
         quote! {
