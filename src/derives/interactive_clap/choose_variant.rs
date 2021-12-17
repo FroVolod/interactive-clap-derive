@@ -129,7 +129,7 @@ pub fn fn_choose_variant(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
     quote! {
         pub fn choose_variant(context: #input_context) -> color_eyre::eyre::Result<Self> {
             #cli_variant
-            Ok(Self::from(Some(cli_variant), context.clone())?)
+            Ok(Self::from_cli(Some(cli_variant), context.clone())?)
         }
     }
 }

@@ -61,7 +61,7 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                 let context_name = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
                 if output_context_dir.is_empty() {
                     quote! {
-                        Some(#cli_name::#variant_ident(args)) => Ok(Self::#variant_ident(#ty::from(Some(args), context.clone())?,)),
+                        Some(#cli_name::#variant_ident(args)) => Ok(Self::#variant_ident(#ty::from_cli(Some(args), context.clone())?,)),
                     }
                 } else {
                     quote! {
@@ -69,7 +69,7 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                             type Alias = <#name as interactive_clap::ToInteractiveClapContextScope>::InteractiveClapContextScope;
                             let new_context_scope = Alias::#variant_ident;
                             let new_context = #context_name::from_previous_context((), &new_context_scope);
-                            Ok(Self::#variant_ident(#ty::from(Some(args), new_context)?,))
+                            Ok(Self::#variant_ident(#ty::from_cli(Some(args), new_context)?,))
                         }
                     }
                 }
@@ -91,7 +91,7 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
     };
     
     quote! {
-        pub fn from(
+        pub fn from_cli(
             optional_clap_variant: Option<#cli_name>,
             context: #input_context,
         ) -> color_eyre::eyre::Result<Self> {
