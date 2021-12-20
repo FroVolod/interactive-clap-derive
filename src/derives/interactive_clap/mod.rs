@@ -27,9 +27,10 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 if field.attrs.is_empty() {
                     return cli_field
                 };
-                let mut clap_attr_vec: Vec<_> = vec![];
+                let mut clap_attr_vec: Vec<proc_macro2::TokenStream> = vec![];
+                let mut cfg_attr_vec: Vec<proc_macro2::TokenStream> = vec![];
                 for attr in &field.attrs {
-                    if attr.path.is_ident("interactive_clap".into()) {
+                    if attr.path.is_ident("interactive_clap".into()) | attr.path.is_ident("cfg".into()) {
                         for attr_token in attr.tokens.clone() {
                             match attr_token {
                                 proc_macro2::TokenTree::Group(group) => {
@@ -51,8 +52,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                         cli_field = quote! {
                                             pub #ident_field: Option<#enum_for_clap_named_arg>
                                         }
-                                    } else {
-                                        continue;
+                                    };
+                                    if group.stream().to_string().contains("feature") {
+                                        cfg_attr_vec.push(attr.into_token_stream())
                                     };
                                     if group.stream().to_string().contains("skip") {
                                         ident_skip_field_vec.push(ident_field.clone());
@@ -67,14 +69,17 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 if cli_field.is_empty() {
                     return cli_field
                 };
+                let cfg_attrs = cfg_attr_vec.iter();
                 if !clap_attr_vec.is_empty() {
                     let clap_attrs = clap_attr_vec.iter();
                     quote! {
+                        #(#cfg_attrs)*
                         #[clap(#(#clap_attrs, )*)]
                         #cli_field
                     }
                 } else {
                     quote! {
+                        #(#cfg_attrs)*
                         #cli_field
                     }
                 }
@@ -197,8 +202,23 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 if !&variant.attrs.is_empty() {
                     for attr in &variant.attrs {
                         if attr.path.is_ident("doc".into()) {
-                            attrs.push(attr.into_token_stream()) ;
-                            break;
+                            attrs.push(attr.into_token_stream());
+                            // break;
+                        };
+                        if attr.path.is_ident("cfg".into()) {
+                            for attr_token in attr.tokens.clone() {
+                                match attr_token {
+                                    proc_macro2::TokenTree::Group(group) => {
+                                        if group.stream().to_string().contains("feature") {
+                                            attrs.push(attr.into_token_stream());
+                                        
+                                        } else {
+                                            continue;
+                                        };
+                                    },
+                                    _ => abort_call_site!("Only option `TokenTree::Group` is needed")
+                                }
+                            };
                         };
                     };
                     match &variant.fields {
@@ -207,16 +227,21 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                             if attrs.is_empty() {
                                 quote! {#ident(<#ty as interactive_clap::ToCli>::CliVariant)}
                             } else {
-                                let attr = attrs.iter().next().unwrap();
                                 quote! {
-                                    #attr
+                                    #(#attrs)*
                                     #ident(<#ty as interactive_clap::ToCli>::CliVariant)
                                 }
                             }
                         },
                         syn::Fields::Unit => {
-                            
-                            quote! { #ident }
+                            if attrs.is_empty() {
+                                quote! {#ident}
+                            } else {
+                                quote! {
+                                    #(#attrs)*
+                                    #ident
+                                }
+                            }
                         },
                         _ => abort_call_site!("Only option `Fields::Unnamed` or `Fields::Unit` is needed")
                     }
