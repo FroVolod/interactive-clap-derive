@@ -75,7 +75,7 @@ pub fn impl_to_cli_args(ast: &syn::DeriveInput) -> TokenStream {
                     };
                 };
             };
-            args_push_front_vec.reverse();
+            let args_push_front_vec = args_push_front_vec.into_iter().rev();
             let gen = quote! {
                 impl #cli_name {
                     pub fn to_cli_args(&self) -> std::collections::VecDeque<String> {
