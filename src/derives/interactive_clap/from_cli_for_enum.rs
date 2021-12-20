@@ -39,7 +39,7 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                             .collect::<Vec<_>>()[2..];
                             context_dir = quote! {#(#group_stream)*};
                         };
-                        if group.stream().to_string().contains("fn_from_cli") && group.stream().to_string().contains("default") {
+                        if group.stream().to_string().contains("skip_default_from_cli") {
                             is_fn_from_default = true;
                         };
                     }
