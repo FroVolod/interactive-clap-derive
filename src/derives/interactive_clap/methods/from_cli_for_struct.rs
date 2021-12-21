@@ -16,7 +16,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
     };
 
     let fields_without_subcommand = fields.iter().map(|field| {
-        field_without_subcommand(field)                
+        super::fields_without_subcommand::field_without_subcommand(field)                
     })
     .filter(|token_stream| !token_stream.is_empty())
     .collect::<Vec<_>>();
@@ -71,37 +71,6 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
             #field_value_named_arg
             #field_value_subcommand
             Ok(Self{ #(#struct_fields,)* })
-        }
-    }
-}
-
-pub fn field_without_subcommand(field: &syn::Field) -> proc_macro2::TokenStream {
-    let ident_field = &field.clone().ident.expect("this field does not exist");
-    if field.attrs.is_empty() {
-        quote! {#ident_field}
-    } else {
-        match field.attrs.iter()
-        .filter(|attr| attr.path.is_ident("interactive_clap".into()))
-        .map(|attr| attr.tokens.clone())
-        .flatten()
-        .filter(|attr_token| {
-            match attr_token {
-                proc_macro2::TokenTree::Group(group) => {
-                    if group.stream().to_string().contains("named_arg") || group.stream().to_string().contains("subcommand") {
-                        false
-                    } else {
-                        true
-                    }
-                },
-                _ => abort_call_site!("Only option `TokenTree::Group` is needed")
-            }
-        })
-        .map(|_| {
-            quote! {#ident_field}
-        })
-        .next() {
-            Some(token_stream) => token_stream,
-            None => quote! ()
         }
     }
 }
@@ -263,23 +232,6 @@ fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_
                     };
                 }
             }
-            // if output_context_dir.is_empty() {
-            //     quote! {
-            //         let #ident_field = match optional_clap_variant.and_then(|clap_variant| clap_variant.#ident_field) {
-            //             Some(cli_arg) => #ty::from_cli(Some(cli_arg), context)?,
-            //             None => #ty::choose_variant(context)?,
-            //         };
-            //     }
-            // } else {
-            //     let context_for_struct = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
-            //     quote! {
-            //         let new_context = #context_for_struct::from_previous_context(context, &new_context_scope);
-            //         let #ident_field = match optional_clap_variant.and_then(|clap_variant| clap_variant.#ident_field) {
-            //             Some(cli_arg) => #ty::from_cli(Some(cli_arg), new_context)?,
-            //             None => #ty::choose_variant(new_context)?,
-            //         };
-            //     }
-            // }
         })
         .next() {
             Some(token_stream) => token_stream,
