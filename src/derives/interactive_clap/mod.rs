@@ -6,9 +6,7 @@ use proc_macro_error::abort_call_site;
 use syn;
 use quote::{ToTokens, quote};
 
-mod choose_variant;
-mod from_cli_for_enum;
-mod from_cli_for_struct;
+mod methods;
 
 
 pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
@@ -18,7 +16,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
     match &ast.data {
         syn::Data::Struct(data_struct) => {
             let fields = data_struct.fields.clone();
-            let mut ident_skip_field_vec: Vec<syn::Ident> = vec![];
+            let mut ident_skip_field_vec: Vec<syn::Ident> = Vec::new();
 
             let cli_fields = fields.iter().map(|field| {
                 let ident_field = field.ident.clone().expect("this field does not exist");
@@ -27,8 +25,8 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 if field.attrs.is_empty() {
                     return cli_field
                 };
-                let mut clap_attr_vec: Vec<proc_macro2::TokenStream> = vec![];
-                let mut cfg_attr_vec: Vec<proc_macro2::TokenStream> = vec![];
+                let mut clap_attr_vec: Vec<proc_macro2::TokenStream> = Vec::new();
+                let mut cfg_attr_vec: Vec<proc_macro2::TokenStream> = Vec::new();
                 for attr in &field.attrs {
                     if attr.path.is_ident("interactive_clap".into()) | attr.path.is_ident("cfg".into()) {
                         for attr_token in attr.tokens.clone() {
@@ -92,7 +90,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             })
             .filter(|token_stream| !token_stream.is_empty());
 
-            let fn_from_cli_for_struct = self::from_cli_for_struct::from_cli_for_struct(&ast, &fields);
+            let fn_from_cli_for_struct = self::methods::from_cli_for_struct::from_cli_for_struct(&ast, &fields);
+
+            // let fn_get_arg = self::get_arg_for_struct::get_arg_for_struct(&ast, &fields);
 
             let context_scope_fields = fields.iter().map(|field| {
                 context_scope_for_struct_field(field)
@@ -179,6 +179,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
                 impl #name {
                     #fn_from_cli_for_struct
+                    // #(#fn_get_arg)*
                 }
 
 
@@ -198,7 +199,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Enum(syn::DataEnum { variants, .. }) => {
             let enum_variants = variants.iter().map(|variant| {
                 let ident = &variant.ident;
-                let mut attrs: Vec<proc_macro2::TokenStream> = vec![];
+                let mut attrs: Vec<proc_macro2::TokenStream> = Vec::new();
                 if !&variant.attrs.is_empty() {
                     for attr in &variant.attrs {
                         if attr.path.is_ident("doc".into()) {
@@ -274,9 +275,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
             let scope_for_enum = context_scope_for_enum(name);
 
-            let fn_choose_variant = self::choose_variant::fn_choose_variant(ast, variants);
+            let fn_choose_variant = self::methods::choose_variant::fn_choose_variant(ast, variants);
 
-            let fn_from_cli_for_enum = self::from_cli_for_enum::from_cli_for_enum(ast, variants);
+            let fn_from_cli_for_enum = self::methods::from_cli_for_enum::from_cli_for_enum(ast, variants);
 
             let gen = quote! {
                 #[derive(Debug, Clone, clap::Clap, interactive_clap_derive::ToCliArgs)]
