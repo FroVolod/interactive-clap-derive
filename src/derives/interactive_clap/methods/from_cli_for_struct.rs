@@ -54,7 +54,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
         struct_field(field, &fields_without_subcommand)                
     });
 
-    let input_context = interactive_clap_attrs_context.get_inpun_context_dir();
+    let input_context_dir = interactive_clap_attrs_context.get_inpun_context_dir();
 
     let interactive_clap_context_scope_for_struct = syn::Ident::new(&format!("InteractiveClapContextScopeFor{}", &name), Span::call_site());
     let new_context_scope = quote! {
@@ -64,7 +64,7 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
     quote! {
         pub fn from_cli(
             optional_clap_variant: Option<#cli_name>,
-            context: #input_context,
+            context: #input_context_dir,
         ) -> color_eyre::eyre::Result<Self> {
             #(#fields_value)*
             #new_context_scope
@@ -77,18 +77,16 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
 
 fn fields_value(field: &syn::Field) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
-    let fn_input_arg = syn::Ident::new(&format!("input_{}", &ident_field), Span::call_site());
+    let fn_get_arg = syn::Ident::new(&format!("get_{}", &ident_field), Span::call_site());
     if field.attrs.is_empty() {
         quote! {
-            let #ident_field = match optional_clap_variant
-                .clone()
-                .and_then(|clap_variant| clap_variant.#ident_field)
-            {
-                Some(#ident_field) => #ident_field,
-                None => Self::#fn_input_arg(&context)?,
-            };
-        }
-        
+            let #ident_field = Self::#fn_get_arg(
+                optional_clap_variant
+                    .clone()
+                    .and_then(|clap_variant| clap_variant.#ident_field),
+                    &context,
+            )?;
+        }    
     } else {
         match field.attrs.iter()
         .filter(|attr| attr.path.is_ident("interactive_clap".into()))
@@ -108,13 +106,12 @@ fn fields_value(field: &syn::Field) -> proc_macro2::TokenStream {
         })
         .map(|_| {
             quote! {
-                let #ident_field = match optional_clap_variant
-                    .clone()
-                    .and_then(|clap_variant| clap_variant.#ident_field)
-                {
-                    Some(#ident_field) => #ident_field,
-                    None => Self::#fn_input_arg(&context)?,
-                };
+                let #ident_field = Self::#fn_get_arg(
+                    optional_clap_variant
+                        .clone()
+                        .and_then(|clap_variant| clap_variant.#ident_field),
+                        &context,
+                )?;
             }
         })
         .next() {

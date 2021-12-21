@@ -3,7 +3,7 @@ extern crate proc_macro;
 use syn;
 use quote::quote;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InteractiveClapAttrsContext {
     pub context_dir: Option<proc_macro2::TokenStream>,
     pub input_context_dir: Option<proc_macro2::TokenStream>,

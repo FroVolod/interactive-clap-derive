@@ -21,7 +21,10 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
             let cli_fields = fields.iter().map(|field| {
                 let ident_field = field.ident.clone().expect("this field does not exist");
                 let ty = &field.ty;
-                let mut cli_field = cli_field(&ident_field, ty);
+                let cli_ty = self::methods::cli_field_type::cli_field_type(ty);
+                let mut cli_field = quote! {
+                    pub #ident_field: #cli_ty
+                };
                 if field.attrs.is_empty() {
                     return cli_field
                 };
@@ -92,7 +95,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
             let fn_from_cli_for_struct = self::methods::from_cli_for_struct::from_cli_for_struct(&ast, &fields);
 
-            // let fn_get_arg = self::get_arg_for_struct::get_arg_for_struct(&ast, &fields);
+            let fn_get_arg = self::methods::get_arg_for_struct::get_arg_for_struct(&ast, &fields);
 
             let context_scope_fields = fields.iter().map(|field| {
                 context_scope_for_struct_field(field)
@@ -178,11 +181,9 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                 #context_scope_for_struct
 
                 impl #name {
+                    #(#fn_get_arg)*
                     #fn_from_cli_for_struct
-                    // #(#fn_get_arg)*
                 }
-
-
 
                 impl From<#name> for #cli_name {
                     fn from(args: #name) -> Self {
@@ -369,38 +370,6 @@ fn context_scope_for_enum(name: &syn::Ident) -> proc_macro2::TokenStream {
     }
 }
 
-fn cli_field(ident_field: &syn::Ident, ty: &syn::Type) -> proc_macro2::TokenStream {
-    match &ty {
-        syn::Type::Path(type_path) => {
-            match type_path.path.segments.first() {
-                Some(path_segment) => {
-                    if path_segment.ident.eq("Option".into()) {
-                        match &path_segment.arguments {
-                            syn::PathArguments::AngleBracketed(gen_args) => {
-                                let ty_option = &gen_args.args;
-                                quote! {
-                                    pub #ident_field: Option<<#ty_option as interactive_clap::ToCli>::CliVariant>
-                                }
-                            },
-                            _ => {
-                                quote! {
-                                    pub #ident_field: Option<<#ty as interactive_clap::ToCli>::CliVariant>
-                                }
-                            },
-                        }
-                    } else {
-                        quote! {
-                            pub #ident_field: Option<<#ty as interactive_clap::ToCli>::CliVariant>
-                        }
-                    }
-                },
-                _ => abort_call_site!("Only option `PathSegment` is needed")
-            }
-        },
-        _ => abort_call_site!("Only option `Type::Path` is needed")
-    }
-}
-
 fn for_cli_field(field: &syn::Field, ident_skip_field_vec: &Vec<syn::Ident>) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
     if ident_skip_field_vec.contains(&ident_field) {
@@ -427,5 +396,3 @@ fn for_cli_field(field: &syn::Field, ident_skip_field_vec: &Vec<syn::Ident>) -> 
         }
     }
 }
-
-
