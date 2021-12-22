@@ -69,7 +69,7 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
                             type Alias = <#name as interactive_clap::ToInteractiveClapContextScope>::InteractiveClapContextScope;
                             let new_context_scope = Alias::#variant_ident;
                             let new_context = #context_name::from_previous_context((), &new_context_scope);
-                            Ok(Self::#variant_ident(#ty::from_cli(Some(args), new_context)?,))
+                            Ok(Self::#variant_ident(#ty::from_cli(Some(args), new_context.into())?,))
                         }
                     }
                 }

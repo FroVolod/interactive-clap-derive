@@ -77,10 +77,10 @@ pub fn from_cli_for_struct(ast: &syn::DeriveInput, fields: &syn::Fields) -> proc
 
 fn fields_value(field: &syn::Field) -> proc_macro2::TokenStream {
     let ident_field = &field.clone().ident.expect("this field does not exist");
-    let fn_get_arg = syn::Ident::new(&format!("get_{}", &ident_field), Span::call_site());
+    let fn_from_cli_arg = syn::Ident::new(&format!("from_cli_{}", &ident_field), Span::call_site());
     if field.attrs.is_empty() {
         quote! {
-            let #ident_field = Self::#fn_get_arg(
+            let #ident_field = Self::#fn_from_cli_arg(
                 optional_clap_variant
                     .clone()
                     .and_then(|clap_variant| clap_variant.#ident_field),
@@ -106,7 +106,7 @@ fn fields_value(field: &syn::Field) -> proc_macro2::TokenStream {
         })
         .map(|_| {
             quote! {
-                let #ident_field = Self::#fn_get_arg(
+                let #ident_field = Self::#fn_from_cli_arg(
                     optional_clap_variant
                         .clone()
                         .and_then(|clap_variant| clap_variant.#ident_field),
@@ -217,15 +217,15 @@ fn field_value_subcommand(name: &syn::Ident, field: &syn::Field, output_context_
                     quote! {
                         let new_context = #context_for_struct::from_previous_context(context, &new_context_scope);
                         let #ident_field = match optional_clap_variant.and_then(|clap_variant| clap_variant.#ident_field) {
-                            Some(cli_arg) => #ty::from_cli(Some(cli_arg), new_context)?,
-                            None => #ty::choose_variant(new_context)?,
+                            Some(cli_arg) => #ty::from_cli(Some(cli_arg), new_context.into())?,
+                            None => #ty::choose_variant(new_context.into())?,
                         };
                     }
                 },
                 None => quote! {
                     let #ident_field = match optional_clap_variant.and_then(|clap_variant| clap_variant.#ident_field) {
                         Some(cli_arg) => #ty::from_cli(Some(cli_arg), context)?,
-                        None => #ty::choose_variant(context)?,
+                        None => #ty::choose_variant(context.into())?,
                     };
                 }
             }

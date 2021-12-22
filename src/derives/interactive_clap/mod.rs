@@ -35,7 +35,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                         for attr_token in attr.tokens.clone() {
                             match attr_token {
                                 proc_macro2::TokenTree::Group(group) => {
-                                    if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("long") | group.stream().to_string().contains("skip") {
+                                    if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("long") | (group.stream().to_string() == "skip".to_string()) {
                                         clap_attr_vec.push(group.stream())
                                     } else if group.stream().to_string().contains("named_arg") {
                                         let ident_subcommand = syn::Ident::new("subcommand", Span::call_site());
@@ -57,7 +57,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
                                     if group.stream().to_string().contains("feature") {
                                         cfg_attr_vec.push(attr.into_token_stream())
                                     };
-                                    if group.stream().to_string().contains("skip") {
+                                    if group.stream().to_string() == "skip".to_string() {
                                         ident_skip_field_vec.push(ident_field.clone());
                                         cli_field = quote! ()
                                     };
@@ -95,7 +95,7 @@ pub fn impl_interactive_clap(ast: &syn::DeriveInput) -> TokenStream {
 
             let fn_from_cli_for_struct = self::methods::from_cli_for_struct::from_cli_for_struct(&ast, &fields);
 
-            let fn_get_arg = self::methods::get_arg_for_struct::get_arg_for_struct(&ast, &fields);
+            let fn_get_arg = self::methods::get_arg_from_cli_for_struct::from_cli_arg(&ast, &fields);
 
             let context_scope_fields = fields.iter().map(|field| {
                 context_scope_for_struct_field(field)
@@ -338,7 +338,7 @@ fn context_scope_for_struct_field(field: &syn::Field) -> proc_macro2::TokenStrea
         .filter(|attr_token| {
             match attr_token {
                 proc_macro2::TokenTree::Group(group) => {
-                    if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("named_arg") | group.stream().to_string().contains("skip") {
+                    if group.stream().to_string().contains("subcommand") | group.stream().to_string().contains("named_arg") | (group.stream().to_string() == "skip".to_string()) {
                         false
                     } else {
                         true
