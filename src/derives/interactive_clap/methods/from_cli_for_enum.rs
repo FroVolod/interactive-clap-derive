@@ -10,46 +10,8 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
     let name = &ast.ident;
     let cli_name = syn::Ident::new(&format!("Cli{}", name), Span::call_site());
 
-    let mut context_dir = quote! ();
-    let mut input_context_dir = quote! ();
-    let mut output_context_dir = quote! ();
-    let mut is_fn_from_default = false;
-    
-    for attr in ast.attrs.clone() {
-        if attr.path.is_ident("interactive_clap".into()) {
-            for attr_token in attr.tokens.clone() {
-                match attr_token {
-                    proc_macro2::TokenTree::Group(group) => {
-                        if group.stream().to_string().contains("output_context") {
-                            let group_stream = &group.stream()
-                            .into_iter()
-                            .collect::<Vec<_>>()[2..];
-                            output_context_dir = quote! {#(#group_stream)*};
-                        } else if group.stream().to_string().contains("input_context") {
-                            let group_stream = &group.stream()
-                            .into_iter()
-                            .collect::<Vec<_>>()[2..];
-                            input_context_dir = quote! {#(#group_stream)*};
-                        } else if group.stream().to_string().contains("context") {
-                            let group_stream = &group.stream()
-                            .into_iter()
-                            // .enumerate()
-                            // .filter(|&(i,_)| i != 0 || i != 1)
-                            // .map(|(_, v)| v)
-                            .collect::<Vec<_>>()[2..];
-                            context_dir = quote! {#(#group_stream)*};
-                        };
-                        if group.stream().to_string().contains("skip_default_from_cli") {
-                            is_fn_from_default = true;
-                        };
-                    }
-                    _ => () //abort_call_site!("Only option `TokenTree::Group` is needed")
-                }
-            }
-        };
-    };
-
-    if is_fn_from_default {
+    let interactive_clap_attrs_context = super::interactive_clap_attrs_context::InteractiveClapAttrsContext::new(&ast);
+    if interactive_clap_attrs_context.is_skip_default_from_cli {
          return quote! (); 
     };
 
@@ -59,18 +21,19 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
             syn::Fields::Unnamed(fields) => {
                 let ty = &fields.unnamed[0].ty;
                 let context_name = syn::Ident::new(&format!("{}Context", &name), Span::call_site());
-                if output_context_dir.is_empty() {
-                    quote! {
-                        Some(#cli_name::#variant_ident(args)) => Ok(Self::#variant_ident(#ty::from_cli(Some(args), context.clone())?,)),
-                    }
-                } else {
-                    quote! {
+
+
+                match &interactive_clap_attrs_context.output_context_dir {
+                    Some(_) => quote! {
                         Some(#cli_name::#variant_ident(args)) => {
                             type Alias = <#name as interactive_clap::ToInteractiveClapContextScope>::InteractiveClapContextScope;
                             let new_context_scope = Alias::#variant_ident;
                             let new_context = #context_name::from_previous_context((), &new_context_scope);
                             Ok(Self::#variant_ident(#ty::from_cli(Some(args), new_context.into())?,))
                         }
+                    },
+                    None => quote! {
+                        Some(#cli_name::#variant_ident(args)) => Ok(Self::#variant_ident(#ty::from_cli(Some(args), context.clone())?,)),
                     }
                 }
             },
@@ -84,16 +47,12 @@ pub fn from_cli_for_enum(ast: &syn::DeriveInput, variants: &syn::punctuated::Pun
         
     });
 
-    let input_context = if let true = !context_dir.is_empty() {
-        context_dir
-    } else {
-        input_context_dir
-    };
+    let input_context_dir = interactive_clap_attrs_context.clone().get_inpun_context_dir();
     
     quote! {
         pub fn from_cli(
             optional_clap_variant: Option<#cli_name>,
-            context: #input_context,
+            context: #input_context_dir,
         ) -> color_eyre::eyre::Result<Self> {
             match optional_clap_variant {
                 #(#from_cli_variants)*
